@@ -145,7 +145,7 @@ function toggleAuthMode(){
 
 function usernameToInternalEmail(username){
   const clean = username.trim().toLowerCase().replace(/[^a-z0-9_.-]/g, '');
-  return `${clean}@users.personalpage.local`;
+  return `${clean}.acct@example.com`;
 }
 
 async function handleAuthSubmit(){
@@ -163,7 +163,7 @@ async function handleAuthSubmit(){
 
     const internalEmail = usernameToInternalEmail(username);
     const { data, error } = await sb.auth.signUp({ email: internalEmail, password });
-    if(error){ errEl.textContent = error.message; return; }
+    if(error){ errEl.textContent = `${error.message} (code: ${error.code || error.status || 'n/a'})`; console.error('Signup error:', error); return; }
     if(!data.user){ errEl.textContent = 'Signup failed, please try again.'; return; }
 
     const { error: unameErr } = await sb.from('usernames').insert({ username: username.toLowerCase(), email: internalEmail, user_id: data.user.id });
