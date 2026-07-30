@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Edit My Page</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="loading">Loading…</div>
+
+<div id="page-content" style="display:none;">
+  <div class="nav">
+    <a href="index.html">View Page</a>
+    <a href="change-password.html">Change Password</a>
+    <button onclick="doLogout()">Log Out</button>
+  </div>
+  <div class="wrap" id="app"></div>
+  <div id="save-toast">Saved</div>
+</div>
+
+<script src="app.js"></script>
+<script>
+let currentUser = null;
+let profile = { name: "Your Name", tagline: "", details: [], social: [], avatar_path: null };
+let avatarUrl = '';
+let galleryItems = [];
+let fileItems = [];
+
+async function init(){
+  const auth = await requireAuth();
+  if(!auth) return; // requireAuth already redirected
+  currentUser = auth.user;
+  profile = await loadProfile(currentUser.id);
+  avatarUrl = await getAvatarUrl(profile.avatar_path);
+  galleryItems = await loadGallery(currentUser.id);
+  fileItems = await loadFiles(currentUser.id);
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('page-content').style.display = 'block';
+  render();
+}
+
+async function commitProfile(){
+  await sb.from('profiles').update({ name: profile.name, tagline: profile.tagline, details: profile.details, social: profile.social }).eq('id', currentUser.id);
+  showToast();
+}
+function updateProfileField(field, val){ profile[field] = val; }
+
+async function uploadAvatar(input){
+  if(!input.files[0]) return;
+  const file = input.files[0];
+  const path = `${currentUser.id}/avatar_${Date.now()}_${file.name}`;
+  const { error } = await sb.storage.from('photos').upload(path, file, { upsert: true });
+  if(error){ alert('Upload failed: ' + error.message); return; }
+  const oldPath = profile.avatar_path;
+  profile.avatar_path = path;
+  await sb.from('profiles').update({ avatar_path: path }).eq('id', currentUser.id);
+  if(oldPath){ await sb.storage.from('photos').remove([oldPath]); }
+  avatarUrl = await getAvatarUrl(path);
+  render();
+  showToast();
+}
+
+function addDetail(){ profile.details.push({label:"New Field", value:"Value"}); commitProfile(); render(); }
+function removeDetail(i){ profile.details.splice(i,1); commitProfile(); render(); }
+function updateDetail(i, field, val){ profile.details[i][field] = val; }
+
+function addSocial(){ profile.social.push({handle:"@new_handle", role:"Role", url:"https://instagram.com/new_handle"}); commitProfile(); render(); }
+function removeSocial(i){ profile.social.splice(i,1); commitProfile(); render(); }
+function updateSocial(i, field, val){ profile.social[i][field] = val; }
+
+async function addPhoto(input){
+  if(!input.files[0]) return;
+  const file = input.files[0];
+  const path = `${currentUser.id}/${Date.now()}_${file.name}`;
+  const { error: upErr } = await sb.storage.from('photos').upload(path, file);
+  if(upErr){ alert('Upload failed: ' + upErr.message); return; }
+  await sb.from('gallery').insert({ user_id: currentUser.id, storage_path: path, caption: 'New caption' });
+  galleryItems = await loadGallery(currentUser.id);
+  render();
+  showToast();
+}
+async function removePhoto(i){
+  const item = galleryItems[i];
+  await sb.storage.from('photos').remove([item.storage_path]);
+  await sb.from('gallery').delete().eq('id', item.id);
+  galleryItems = await loadGallery(currentUser.id);
+  render();
+}
+async function updateCaption(i, val){
+  galleryItems[i].caption = val;
+  await sb.from('gallery').update({ caption: val }).eq('id', galleryItems[i].id);
+}
+
+async function addFile(input){
+  if(!input.files[0]) return;
+  const file = input.files[0];
+  const path = `${currentUser.id}/${Date.now()}_${file.name}`;
+  const { error: upErr } = await sb.storage.from('files').upload(path, file);
+  if(upErr){ alert('Upload failed: ' + upErr.message); return; }
+  await sb.from('files').insert({ user_id: currentUser.id, storage_path: path, label: file.name });
+  fileItems = await loadFiles(currentUser.id);
+  render();
+  showToast();
+}
+async function removeFile(i){
+  const item = fileItems[i];
+  await sb.storage.from('files').remove([item.storage_path]);
+  await sb.from('files').delete().eq('id', item.id);
+  fileItems = await loadFiles(currentUser.id);
+  render();
+}
+async function updateFileLabel(i, val){
+  fileItems[i].label = val;
+  await sb.from('files').update({ label: val }).eq('id', fileItems[i].id);
+}
+
+function render(){
+  let html = '';
+
+  html += `<div class="hero">
+    <div class="avatar-wrap"><img src="${avatarUrl || 'https://placehold.co/240x240/2c2a45/cfc9bb?text=Photo'}" alt="Profile photo"></div>
+    <label class="avatar-upload-label">Change profile picture<input type="file" accept="image/*" style="display:none;" onchange="uploadAvatar(this)"></label>
+    <div class="eyebrow">Editing Your Page</div>
+    <input type="text" value="${esc(profile.name)}" oninput="updateProfileField('name', this.value)" onblur="commitProfile()" style="margin-top:14px;font-family:'Fraunces',serif;font-size:34px;font-weight:700;background:var(--ink-soft);border:1px solid var(--line);color:var(--cream);border-radius:8px;padding:8px 12px;width:100%;max-width:500px;">
+    <textarea oninput="updateProfileField('tagline', this.value)" onblur="commitProfile()" style="margin-top:12px;width:100%;max-width:520px;background:var(--ink-soft);border:1px solid var(--line);color:var(--cream);border-radius:8px;padding:10px 12px;font-size:15px;" rows="2">${esc(profile.tagline)}</textarea>
+  </div>`;
+
+  html += `<section><div class="section-label">About</div><h2>Personal Details</h2><ul class="ledger">`;
+  profile.details.forEach((row,i)=>{
+    html += `<li><div class="row-flex">
+      <input class="lbl-input" value="${esc(row.label)}" oninput="updateDetail(${i},'label',this.value)" onblur="commitProfile()">
+      <input class="val-input" value="${esc(row.value)}" oninput="updateDetail(${i},'value',this.value)" onblur="commitProfile()">
+      <button class="card-remove" style="position:static;width:22px;height:22px;font-size:12px;" onclick="removeDetail(${i})">×</button>
+    </div></li>`;
+  });
+  html += `</ul><button class="add-btn" onclick="addDetail()">+ Add Detail</button></section>`;
+
+  html += `<section><div class="section-label">Memories</div><h2>Photo Gallery</h2><div class="gallery">`;
+  galleryItems.forEach((p,i)=>{
+    html += `<figure class="polaroid">
+      <button class="card-remove" onclick="removePhoto(${i})">×</button>
+      <img src="${p.url}" alt="Gallery photo">
+      <input class="cap-input" value="${esc(p.caption)}" oninput="updateCaption(${i}, this.value)">
+    </figure>`;
+  });
+  html += `</div><label class="add-btn" style="cursor:pointer;">+ Add Photo<input type="file" accept="image/*" style="display:none;" onchange="addPhoto(this)"></label></section>`;
+
+  html += `<section><div class="section-label">Documents</div><h2>My Files</h2><ul class="files">`;
+  fileItems.forEach((f,i)=>{
+    html += `<li><div class="file-edit-row">
+      <input value="${esc(f.label)}" oninput="updateFileLabel(${i}, this.value)" placeholder="Display name">
+      <span style="font-size:12px;color:var(--gold-soft);">File: ${esc(f.fileName)}</span>
+    </div><button class="card-remove" style="position:static;width:24px;height:24px;" onclick="removeFile(${i})">×</button></li>`;
+  });
+  html += `</ul><label class="add-btn" style="cursor:pointer;">+ Add File<input type="file" style="display:none;" onchange="addFile(this)"></label></section>`;
+
+  html += `<section><div class="section-label">Find Me</div><h2>Instagram</h2><div class="social-grid">`;
+  profile.social.forEach((s,i)=>{
+    html += `<div class="social-card">
+      <button class="card-remove" onclick="removeSocial(${i})">×</button>
+      <input value="${esc(s.handle)}" oninput="updateSocial(${i},'handle',this.value)" onblur="commitProfile()" placeholder="@handle">
+      <input value="${esc(s.role)}" oninput="updateSocial(${i},'role',this.value)" onblur="commitProfile()" placeholder="Role">
+      <input value="${esc(s.url)}" oninput="updateSocial(${i},'url',this.value)" onblur="commitProfile()" placeholder="https://instagram.com/...">
+    </div>`;
+  });
+  html += `</div><button class="add-btn" onclick="addSocial()">+ Add Account</button></section>`;
+
+  html += `<footer>Changes save automatically as you edit.</footer>`;
+  document.getElementById('app').innerHTML = html;
+}
+
+init();
+</script>
+
+</body>
+</html>
