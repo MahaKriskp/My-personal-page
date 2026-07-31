@@ -77,3 +77,37 @@ async function loadFiles(userId){
   }
   return items;
 }
+
+// Renders the collapsible dot-menu into #nav-container, excluding the link to the current page.
+// currentPage is one of: 'view', 'edit', 'password'
+function renderMenu(currentPage){
+  const pages = [
+    { key: 'view', href: 'index.html', label: 'View Page' },
+    { key: 'edit', href: 'edit.html', label: 'Edit Page' },
+    { key: 'password', href: 'change-password.html', label: 'Change Password' }
+  ];
+  const items = pages.filter(p => p.key !== currentPage)
+    .map(p => `<a href="${p.href}">${p.label}</a>`).join('');
+  const html = `<div class="menu">
+      <button class="menu-btn" id="menu-btn" onclick="toggleMenu(event)" aria-label="Menu">&#8942;</button>
+      <div class="menu-dropdown" id="menu-dropdown">
+        ${items}
+        <button onclick="doLogout()">Log Out</button>
+      </div>
+    </div>`;
+  const container = document.getElementById('nav-container');
+  if(container) container.innerHTML = html;
+
+  document.addEventListener('click', function(e){
+    const dropdown = document.getElementById('menu-dropdown');
+    const btn = document.getElementById('menu-btn');
+    if(dropdown && dropdown.classList.contains('show') && !dropdown.contains(e.target) && e.target !== btn){
+      dropdown.classList.remove('show');
+    }
+  });
+}
+
+function toggleMenu(e){
+  if(e) e.stopPropagation();
+  document.getElementById('menu-dropdown').classList.toggle('show');
+}

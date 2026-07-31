@@ -14,11 +14,7 @@
 <div id="loading">Loading…</div>
 
 <div id="page-content" style="display:none;">
-  <div class="nav">
-    <a href="index.html">View Page</a>
-    <a href="change-password.html">Change Password</a>
-    <button onclick="doLogout()">Log Out</button>
-  </div>
+  <div id="nav-container"></div>
   <div class="wrap" id="app"></div>
   <div id="save-toast">Saved</div>
 </div>
@@ -41,6 +37,7 @@ async function init(){
   fileItems = await loadFiles(currentUser.id);
   document.getElementById('loading').style.display = 'none';
   document.getElementById('page-content').style.display = 'block';
+  renderMenu('edit');
   render();
 }
 

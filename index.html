@@ -27,11 +27,7 @@
 </div>
 
 <div id="page-content">
-  <div class="nav">
-    <a href="edit.html">Edit Page</a>
-    <a href="change-password.html">Change Password</a>
-    <button onclick="doLogout()">Log Out</button>
-  </div>
+  <div id="nav-container"></div>
   <div class="wrap" id="app"></div>
 </div>
 
@@ -100,6 +96,7 @@ async function showApp(){
 
   document.getElementById('auth-screen').style.display = 'none';
   document.getElementById('page-content').style.display = 'block';
+  renderMenu('view');
   render(username, profile, avatarUrl, galleryItems, fileItems);
 }
 
