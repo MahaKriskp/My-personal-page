@@ -114,7 +114,12 @@ function render(username, profile, avatarUrl, galleryItems, fileItems){
   profile.details.forEach(row => { html += `<li><span>${esc(row.label)}</span><span>${esc(row.value)}</span></li>`; });
   html += `</ul></section>`;
 
-  html += `<section><div class="section-label">Memories</div><h2>Photo Gallery</h2><div class="gallery">`;
+  if(profile.location_lat && profile.location_lng){
+    html += `<section><div class="section-label">Whereabouts</div><h2>Location</h2>
+      ${profile.location_label ? `<p class="tagline">${esc(profile.location_label)}</p>` : ''}
+      ${mapEmbedHtml(profile.location_lat, profile.location_lng)}
+    </section>`;
+  }
   galleryItems.forEach(p => {
     html += `<figure class="polaroid"><img src="${p.url}" alt="Gallery photo"><figcaption>${esc(p.caption)}</figcaption></figure>`;
   });

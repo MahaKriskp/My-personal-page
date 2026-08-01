@@ -48,8 +48,49 @@ async function loadProfile(userId){
     tagline: data.tagline || "",
     details: data.details || [],
     social: data.social || [],
-    avatar_path: data.avatar_path || null
+    avatar_path: data.avatar_path || null,
+    location_label: data.location_label || '',
+    location_lat: (data.location_lat !== undefined ? data.location_lat : null),
+    location_lng: (data.location_lng !== undefined ? data.location_lng : null)
   };
+}
+
+// Returns an embedded OpenStreetMap iframe (no API key needed) centered on lat/lng with a pin.
+function mapEmbedHtml(lat, lng){
+  const delta = 0.01;
+  const bbox = `${lng - delta},${lat - delta},${lng + delta},${lat + delta}`;
+  return `<div style="margin-top:16px;border-radius:10px;overflow:hidden;border:1px solid var(--line);">
+    <iframe width="100%" height="300" style="display:block;" frameborder="0" scrolling="no"
+      src="https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&marker=${lat},${lng}"></iframe>
+  </div>`;
+}
+
+// Looks up a place name via OpenStreetMap's free Nominatim geocoder. Returns {lat,lng} or null.
+async function geocodePlace(query){
+  try{
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`);
+    const results = await res.json();
+    if(!results.length) return null;
+    return { lat: parseFloat(results[0].lat), lng: parseFloat(results[0].lon) };
+  } catch(e){
+    return null;
+  }
+}
+
+// Turns coordinates into a readable place label (city, state, country) via Nominatim reverse lookup.
+async function reverseGeocodePlace(lat, lng){
+  try{
+    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
+    const data = await res.json();
+    if(data && data.address){
+      const a = data.address;
+      const parts = [a.city || a.town || a.village || a.suburb, a.state, a.country].filter(Boolean);
+      if(parts.length) return parts.join(', ');
+    }
+    return (data && data.display_name) ? data.display_name : null;
+  } catch(e){
+    return null;
+  }
 }
 
 async function getAvatarUrl(avatarPath){

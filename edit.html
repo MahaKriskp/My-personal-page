@@ -22,7 +22,7 @@
 <script src="app.js"></script>
 <script>
 let currentUser = null;
-let profile = { name: "Your Name", tagline: "", details: [], social: [], avatar_path: null };
+let profile = { name: "Your Name", tagline: "", details: [], social: [], avatar_path: null, location_label: '', location_lat: null, location_lng: null };
 let avatarUrl = '';
 let galleryItems = [];
 let fileItems = [];
@@ -39,13 +39,56 @@ async function init(){
   document.getElementById('page-content').style.display = 'block';
   renderMenu('edit');
   render();
+  autoDetectLocation();
+}
+
+// Runs automatically every time this page loads: asks the browser for the current
+// GPS position and updates the saved location. If permission is denied or
+// unavailable, it fails quietly and the existing saved location stays as-is.
+async function autoDetectLocation(){
+  const status = document.getElementById('loc-status');
+  if(!navigator.geolocation){
+    if(status) status.textContent = 'Automatic location isn\'t supported in this browser — search manually below.';
+    return;
+  }
+  if(status) status.textContent = 'Detecting your current location…';
+  navigator.geolocation.getCurrentPosition(async (pos) => {
+    const lat = pos.coords.latitude;
+    const lng = pos.coords.longitude;
+    profile.location_lat = lat;
+    profile.location_lng = lng;
+    const label = await reverseGeocodePlace(lat, lng);
+    if(label) profile.location_label = label;
+    await commitProfile();
+    render();
+  }, () => {
+    const s = document.getElementById('loc-status');
+    if(s) s.textContent = 'Location access denied or unavailable — you can still search manually below.';
+  }, { enableHighAccuracy: false, timeout: 8000 });
 }
 
 async function commitProfile(){
-  await sb.from('profiles').update({ name: profile.name, tagline: profile.tagline, details: profile.details, social: profile.social }).eq('id', currentUser.id);
+  await sb.from('profiles').update({
+    name: profile.name, tagline: profile.tagline, details: profile.details, social: profile.social,
+    location_label: profile.location_label, location_lat: profile.location_lat, location_lng: profile.location_lng
+  }).eq('id', currentUser.id);
   showToast();
 }
 function updateProfileField(field, val){ profile[field] = val; }
+
+async function findLocation(){
+  const status = document.getElementById('loc-status');
+  const query = (profile.location_label || '').trim();
+  if(!query){ status.textContent = 'Type a place name first.'; return; }
+  status.textContent = 'Searching…';
+  const result = await geocodePlace(query);
+  if(!result){ status.textContent = 'Location not found — try a different name (e.g. "Jaipur, India").'; return; }
+  profile.location_lat = result.lat;
+  profile.location_lng = result.lng;
+  await commitProfile();
+  status.textContent = 'Pin updated.';
+  render();
+}
 
 async function uploadAvatar(input){
   if(!input.files[0]) return;
@@ -136,6 +179,17 @@ function render(){
     </div></li>`;
   });
   html += `</ul><button class="add-btn" onclick="addDetail()">+ Add Detail</button></section>`;
+
+  html += `<section><div class="section-label">Whereabouts</div><h2>Location</h2>
+    <p style="font-size:13px;color:var(--cream-dim);max-width:480px;">Detects automatically from your device each time you open this page. This location becomes visible to anyone you've shared your page with.</p>
+    <div id="loc-status" style="font-size:12px;color:var(--gold-soft);margin:10px 0;"></div>
+    ${(profile.location_lat && profile.location_lng) ? mapEmbedHtml(profile.location_lat, profile.location_lng) : ''}
+    ${profile.location_label ? `<p class="tagline" style="margin-top:10px;">${esc(profile.location_label)}</p>` : ''}
+    <div style="margin-top:18px;">
+      <input value="${esc(profile.location_label)}" oninput="updateProfileField('location_label', this.value)" placeholder="Or set a different location, e.g. Jaipur, India" style="width:100%;max-width:420px;background:var(--ink-soft);border:1px solid var(--line);color:var(--cream);border-radius:8px;padding:10px 12px;font-size:14px;">
+      <button class="add-btn" onclick="findLocation()">Search This Instead</button>
+    </div>
+  </section>`;
 
   html += `<section><div class="section-label">Memories</div><h2>Photo Gallery</h2><div class="gallery">`;
   galleryItems.forEach((p,i)=>{
